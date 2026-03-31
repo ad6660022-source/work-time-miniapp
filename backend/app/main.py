@@ -18,7 +18,7 @@ from app.routers import auth, shifts, tasks, users, reports, attendance
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-STATIC_DIR = Path(__file__).parent.parent.parent / "frontend" / "dist"
+STATIC_DIR = Path(os.getenv("STATIC_DIR", str(Path(__file__).parent.parent / "frontend" / "dist")))
 
 
 @asynccontextmanager
