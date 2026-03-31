@@ -63,7 +63,7 @@ export default function AttendanceBanner() {
         background: 'rgba(52,211,153,0.1)',
         border: '1px solid rgba(52,211,153,0.3)',
       }}>
-        <CheckCircle size={22} color="var(--green)" flexShrink={0} />
+        <CheckCircle size={22} color="var(--green)" style={{ flexShrink: 0 }} />
         <div>
           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--green)' }}>Вы отметились ✓</div>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Присутствие зафиксировано</div>
