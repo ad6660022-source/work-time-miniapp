@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Shield, Users, Play, Square } from 'lucide-react'
 import { api } from '../../api'
 import { useTelegram } from '../../hooks/useTelegram'
+import AttendanceBanner from '../../components/AttendanceBanner'
 import type { ShiftOverview, Shift } from '../../types'
 
 interface Props { userName: string }
@@ -127,6 +128,8 @@ export default function AdminDashboard({ userName }: Props) {
         </div>
       </div>
 
+      <AttendanceBanner />
+
       {/* ── Моя смена ── */}
       <div className="glass card slide-up" style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600, marginBottom: 14 }}>
@@ -210,11 +213,11 @@ export default function AdminDashboard({ userName }: Props) {
 
         {activeCheck ? (
           <>
-            <div className="countdown">
-              {String(Math.floor(countdown / 60)).padStart(2,'0')}:{String(countdown % 60).padStart(2,'0')}
-            </div>
-            <div style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13, margin: '8px 0 16px' }}>
-              Ожидаем ответов…
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div style={{ fontSize: 13, color: 'var(--amber)' }}>
+                ⏱ {String(Math.floor(countdown / 60)).padStart(2,'0')}:{String(countdown % 60).padStart(2,'0')} осталось
+              </div>
+              <span className="badge badge-assigned">Активна</span>
             </div>
             {activeCheck.responses.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>

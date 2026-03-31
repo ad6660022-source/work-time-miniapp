@@ -22,16 +22,22 @@ async def start_check(x_init_data: str = Header(...), request: Request = None):
     if active:
         raise HTTPException(400, "Active check already exists")
 
-    employees = await db.get_non_admin_employees(pool)
-    if not employees:
+    all_employees = await db.get_employees(pool)
+    if not all_employees:
         raise HTTPException(400, "No employees")
 
     now = datetime.now(MOSCOW_TZ)
     expires_at = now + timedelta(minutes=CHECK_MINUTES)
     check = await db.create_attendance_check(pool, admin["id"], expires_at)
 
+    # Инициатор автоматически отмечается
+    await db.add_attendance_response(pool, check["id"], admin["id"])
+
     from app.bot import send_message_to_user
-    for emp in employees:
+    for emp in all_employees:
+        # Инициатору уведомление не нужно — он сам запустил
+        if emp["id"] == admin["id"]:
+            continue
         await db.create_notification(
             pool, emp["id"], "📍 Проверка присутствия! Откройте приложение и отметьтесь.", "attendance"
         )

@@ -108,7 +108,7 @@ async def job_attendance_expiry(pool: asyncpg.Pool):
     await db.close_attendance_check(pool, check["id"])
     responses = await db.get_attendance_responses(pool, check["id"])
     responded_ids = {r["id"] for r in responses}
-    employees = await db.get_non_admin_employees(pool)
+    employees = await db.get_employees(pool)
     absent = [e for e in employees if e["id"] not in responded_ids]
 
     lines = [f"📍 <b>Результаты проверки</b>\n"]

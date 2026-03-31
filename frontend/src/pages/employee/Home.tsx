@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Play, Square, Clock, CheckCircle } from 'lucide-react'
 import { api } from '../../api'
 import { useTelegram } from '../../hooks/useTelegram'
+import AttendanceBanner from '../../components/AttendanceBanner'
 import type { Shift } from '../../types'
 
 interface Props { userName: string }
@@ -74,6 +75,8 @@ export default function EmployeeHome({ userName }: Props) {
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
+
+      <AttendanceBanner />
 
       {/* Shift card */}
       <div className="glass card shift-display slide-up">
