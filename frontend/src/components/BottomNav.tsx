@@ -29,11 +29,11 @@ export default function BottomNav({ isAdmin }: Props) {
   ]
 
   const adminTabs = [
-    { path: '/admin',         icon: Home,        label: 'Дашборд' },
-    { path: '/admin/employees', icon: Users,     label: 'Команда' },
-    { path: '/admin/tasks',   icon: CheckSquare, label: 'Задачи' },
-    { path: '/admin/reports', icon: FileText,    label: 'Отчёты' },
-    { path: '/notifs',        icon: Bell,        label: 'Уведомления', badge: unread },
+    { path: '/admin',           icon: Home,        label: 'Дашборд' },
+    { path: '/admin/employees', icon: Users,       label: 'Команда' },
+    { path: '/admin/tasks',     icon: CheckSquare, label: 'Задачи' },
+    { path: '/admin/reports',   icon: FileText,    label: 'Отчёты' },
+    { path: '/notifs',          icon: Bell,        label: 'Уведомления', badge: unread },
   ]
 
   const tabs = isAdmin ? adminTabs : employeeTabs

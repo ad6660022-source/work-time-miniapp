@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Shield, Users, Clock, AlertCircle } from 'lucide-react'
+import { Shield, Users, Play, Square } from 'lucide-react'
 import { api } from '../../api'
 import { useTelegram } from '../../hooks/useTelegram'
-import type { ShiftOverview } from '../../types'
+import type { ShiftOverview, Shift } from '../../types'
 
 interface Props { userName: string }
 
@@ -12,6 +12,9 @@ export default function AdminDashboard({ userName }: Props) {
   const [checking, setChecking] = useState(false)
   const [activeCheck, setActiveCheck] = useState<any>(null)
   const [checkMsg, setCheckMsg] = useState('')
+  const [shift, setShift] = useState<Shift | null | undefined>(undefined)
+  const [elapsed, setElapsed] = useState('')
+  const [shiftLoading, setShiftLoading] = useState(false)
   const { haptic } = useTelegram()
 
   const load = useCallback(async () => {
@@ -29,14 +32,39 @@ export default function AdminDashboard({ userName }: Props) {
     } catch {}
   }, [])
 
+  const loadShift = useCallback(async () => {
+    try {
+      const r = await api.shifts.today()
+      setShift(r.shift)
+    } catch {}
+  }, [])
+
   useEffect(() => {
-    load(); loadCheck()
+    load(); loadCheck(); loadShift()
     const t1 = setInterval(load, 60_000)
     const t2 = setInterval(loadCheck, 5_000)
     return () => { clearInterval(t1); clearInterval(t2) }
-  }, [load, loadCheck])
+  }, [load, loadCheck, loadShift])
 
-  // Countdown for active check
+  // Live timer for admin shift
+  useEffect(() => {
+    if (!shift || shift.status !== 'active' || !shift.start_time) return
+    const tick = () => {
+      const [h, m] = shift.start_time!.split(':').map(Number)
+      const now = new Date()
+      const start = new Date()
+      start.setHours(h, m, 0, 0)
+      const diff = Math.max(0, now.getTime() - start.getTime())
+      const hours = Math.floor(diff / 3_600_000)
+      const mins  = Math.floor((diff % 3_600_000) / 60_000)
+      const secs  = Math.floor((diff % 60_000) / 1000)
+      setElapsed(`${String(hours).padStart(2,'0')}:${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`)
+    }
+    tick()
+    const t = setInterval(tick, 1000)
+    return () => clearInterval(t)
+  }, [shift])
+
   const [countdown, setCountdown] = useState(0)
   useEffect(() => {
     if (!activeCheck) return
@@ -50,6 +78,20 @@ export default function AdminDashboard({ userName }: Props) {
     return () => clearInterval(t)
   }, [activeCheck, loadCheck])
 
+  const doStartShift = async () => {
+    if (shiftLoading) return
+    setShiftLoading(true)
+    try { const r = await api.shifts.start(); setShift(r.shift); haptic.success() }
+    catch {} finally { setShiftLoading(false) }
+  }
+
+  const doEndShift = async () => {
+    if (shiftLoading) return
+    setShiftLoading(true)
+    try { const r = await api.shifts.end(); setShift(r.shift); haptic.medium() }
+    catch {} finally { setShiftLoading(false) }
+  }
+
   const doCheck = async () => {
     if (checking) return
     setChecking(true); setCheckMsg('')
@@ -57,14 +99,13 @@ export default function AdminDashboard({ userName }: Props) {
       await api.attendance.startCheck()
       await loadCheck()
       haptic.success()
-      setCheckMsg('✅ Проверка запущена! Ждите 5 минут.')
-    } catch (e: any) {
-      setCheckMsg(e.message)
-      haptic.error()
-    }
+      setCheckMsg('✅ Проверка запущена!')
+    } catch (e: any) { setCheckMsg(e.message); haptic.error() }
     setChecking(false)
   }
 
+  const isActive = shift?.status === 'active'
+  const isClosed = shift?.status === 'closed'
   const on = overview.filter(s => s.status === 'active')
   const off = overview.filter(s => s.status === 'closed')
   const absent = overview.filter(s => !s.status)
@@ -77,11 +118,69 @@ export default function AdminDashboard({ userName }: Props) {
             <Shield size={20} color="var(--accent-2)" />
             <div className="page-title" style={{ fontSize: 22 }}>Дашборд</div>
           </div>
-          <div className="page-subtitle">{currentTime && `Обновлено в ${currentTime}`}</div>
+          <div className="page-subtitle">
+            Привет, {userName.split(' ')[0]} 👋
+          </div>
+        </div>
+        <div style={{ textAlign: 'right', color: 'var(--text-secondary)', fontSize: 13 }}>
+          {currentTime && `${currentTime}`}
         </div>
       </div>
 
-      {/* Summary cards */}
+      {/* ── Моя смена ── */}
+      <div className="glass card slide-up" style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600, marginBottom: 14 }}>
+          МОЯ СМЕНА
+        </div>
+
+        {shift === undefined ? (
+          <div className="loader" style={{ minHeight: 60 }}><div className="spinner" /></div>
+        ) : isActive ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <div className="dot dot-green" />
+                <span style={{ fontSize: 13, color: 'var(--green)', fontWeight: 600 }}>СМЕНА ИДЁТ</span>
+              </div>
+              <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: -1, lineHeight: 1 }} className="shift-pulse">
+                {elapsed || '00:00:00'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                начало в {shift.start_time}
+              </div>
+            </div>
+            <button className="btn btn-red" onClick={doEndShift} disabled={shiftLoading}>
+              <Square size={16} /> Завершить
+            </button>
+          </div>
+        ) : isClosed ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Завершена</div>
+              <div style={{ fontSize: 20, fontWeight: 700 }}>
+                {shift.start_time} — {shift.end_time}
+              </div>
+              {shift.duration_minutes && (
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                  {Math.floor(shift.duration_minutes / 60)}ч {shift.duration_minutes % 60}мин
+                </div>
+              )}
+            </div>
+            <span className="badge badge-closed">✔ Готово</span>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
+              Смена ещё не начата
+            </div>
+            <button className="btn btn-green" onClick={doStartShift} disabled={shiftLoading}>
+              <Play size={16} /> Начать
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Статистика команды ── */}
       <div className="stats-grid" style={{ marginBottom: 16 }}>
         <div className="glass-sm stat-card">
           <div className="stat-value stat-green">{on.length}</div>
@@ -101,7 +200,7 @@ export default function AdminDashboard({ userName }: Props) {
         </div>
       </div>
 
-      {/* Attendance check */}
+      {/* ── Проверка на месте ── */}
       <div className="glass card" style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600, marginBottom: 14 }}>
           📍 ПРОВЕРКА НА МЕСТЕ
@@ -109,7 +208,9 @@ export default function AdminDashboard({ userName }: Props) {
 
         {activeCheck ? (
           <>
-            <div className="countdown">{String(Math.floor(countdown / 60)).padStart(2,'0')}:{String(countdown % 60).padStart(2,'0')}</div>
+            <div className="countdown">
+              {String(Math.floor(countdown / 60)).padStart(2,'0')}:{String(countdown % 60).padStart(2,'0')}
+            </div>
             <div style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13, margin: '8px 0 16px' }}>
               Ожидаем ответов…
             </div>
@@ -135,7 +236,7 @@ export default function AdminDashboard({ userName }: Props) {
         )}
       </div>
 
-      {/* Employees list */}
+      {/* ── Список сотрудников ── */}
       {overview.length > 0 && (
         <>
           <div className="section-label">Сотрудники сегодня</div>
@@ -148,15 +249,9 @@ export default function AdminDashboard({ userName }: Props) {
                   <div className="list-item-subtitle">{s.position || '—'}</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  {s.status === 'active' && (
-                    <span className="badge badge-active">с {s.start_time}</span>
-                  )}
-                  {s.status === 'closed' && (
-                    <span className="badge badge-closed">{s.start_time}–{s.end_time}</span>
-                  )}
-                  {!s.status && (
-                    <span className="badge badge-absent">нет</span>
-                  )}
+                  {s.status === 'active' && <span className="badge badge-active">с {s.start_time}</span>}
+                  {s.status === 'closed' && <span className="badge badge-closed">{s.start_time}–{s.end_time}</span>}
+                  {!s.status && <span className="badge badge-absent">нет</span>}
                 </div>
               </div>
             ))}
