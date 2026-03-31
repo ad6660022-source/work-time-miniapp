@@ -116,16 +116,14 @@ export default function EmployeeHome({ userName }: Props) {
 
         <div style={{ height: 24 }} />
 
-        {!isClosed && (
-          isActive ? (
-            <button className="btn btn-red btn-full" onClick={doEnd} disabled={loading}>
-              <Square size={18} /> Завершить смену
-            </button>
-          ) : (
-            <button className="btn btn-green btn-full" onClick={doStart} disabled={loading}>
-              <Play size={18} /> Начать смену
-            </button>
-          )
+        {isActive ? (
+          <button className="btn btn-red btn-full" onClick={doEnd} disabled={loading}>
+            <Square size={18} /> Завершить смену
+          </button>
+        ) : (
+          <button className="btn btn-green btn-full" onClick={doStart} disabled={loading}>
+            <Play size={18} /> {isClosed ? 'Возобновить смену' : 'Начать смену'}
+          </button>
         )}
       </div>
 

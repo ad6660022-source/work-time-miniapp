@@ -166,7 +166,9 @@ export default function AdminDashboard({ userName }: Props) {
                 </div>
               )}
             </div>
-            <span className="badge badge-closed">✔ Готово</span>
+            <button className="btn btn-green btn-sm" onClick={doStartShift} disabled={shiftLoading}>
+              <Play size={14} /> Возобновить
+            </button>
           </div>
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

@@ -55,11 +55,13 @@ async def start_shift(x_init_data: str = Header(...), request: Request = None):
     if not user or not user["is_approved"]:
         raise HTTPException(403)
 
+    now = datetime.now(MOSCOW_TZ)
+    if now.hour >= 19:
+        raise HTTPException(400, "Рабочий день уже закончился (после 19:00)")
+
     existing = await db.get_today_shift(pool, user["id"])
     if existing and existing["status"] == "active":
         raise HTTPException(400, "Shift already active")
-    if existing and existing["status"] == "closed":
-        raise HTTPException(400, "Shift already closed today")
 
     shift = await db.start_shift(pool, user["id"])
     return {"shift": _serialize_shift(shift)}
