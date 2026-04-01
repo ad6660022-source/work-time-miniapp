@@ -119,13 +119,20 @@ async def update_schedule(
     pool: asyncpg.Pool, user_id: int,
     work_days: List[int], shift_start: str, shift_end: str
 ) -> None:
+    from datetime import time as time_type
+    def to_time(s: str):
+        parts = s.strip().split(":")
+        h, m = int(parts[0]), int(parts[1])
+        return time_type(h, m)
     async with pool.acquire() as conn:
         await conn.execute(
             """INSERT INTO user_schedules (user_id, work_days, shift_start, shift_end)
                VALUES ($1, $2, $3, $4)
                ON CONFLICT (user_id) DO UPDATE
-               SET work_days=$2, shift_start=$3, shift_end=$4""",
-            user_id, work_days, shift_start, shift_end
+               SET work_days=EXCLUDED.work_days,
+                   shift_start=EXCLUDED.shift_start,
+                   shift_end=EXCLUDED.shift_end""",
+            user_id, work_days, to_time(shift_start), to_time(shift_end)
         )
 
 
