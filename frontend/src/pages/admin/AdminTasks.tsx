@@ -20,9 +20,9 @@ export default function AdminTasks() {
   const load = async () => {
     setLoading(true)
     try {
-      const [t, e] = await Promise.all([api.tasks.all(), api.users.employees()])
+      const [t, e] = await Promise.all([api.tasks.all(), api.users.all()])
       setTasks(t.tasks)
-      setEmployees(e.employees)
+      setEmployees(e.users.filter(u => u.is_approved && !u.is_blocked))
     } catch {} finally { setLoading(false) }
   }
 
