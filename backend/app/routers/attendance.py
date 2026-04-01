@@ -47,6 +47,16 @@ async def start_check(x_init_data: str = Header(...), request: Request = None):
             f"У вас {CHECK_MINUTES} минут. Откройте приложение и нажмите «Я на месте»."
         )
 
+    # Уведомление в группу
+    if await db.get_setting(pool, "notify_attendance") == "true":
+        group_id = await db.get_setting(pool, "group_chat_id")
+        if group_id:
+            from app.bot import send_to_group
+            await send_to_group(
+                group_id,
+                f"📍 <b>Проверка присутствия запущена</b>\n\nУ сотрудников {CHECK_MINUTES} минут чтобы отметиться в приложении."
+            )
+
     return {"check_id": check["id"], "expires_at": expires_at.isoformat()}
 
 

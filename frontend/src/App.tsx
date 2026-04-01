@@ -23,6 +23,7 @@ import EmployeeDetail from './pages/admin/EmployeeDetail'
 import AdminTasks from './pages/admin/AdminTasks'
 import AdminTaskDetail from './pages/admin/AdminTaskDetail'
 import { ReportsList, ReportsByDate } from './pages/admin/Reports'
+import Settings from './pages/admin/Settings'
 
 type AppState = 'loading' | 'register' | 'pending' | 'blocked' | 'ready'
 
@@ -110,6 +111,7 @@ export default function App() {
             <Route path="/admin/tasks/:id"   element={<AdminTaskDetail />} />
             <Route path="/admin/reports"     element={<ReportsList />} />
             <Route path="/admin/reports/:date" element={<ReportsByDate />} />
+            <Route path="/admin/settings"    element={<Settings />} />
             <Route path="/notifs"            element={<Notifications />} />
             <Route path="*"                  element={<Navigate to="/admin" replace />} />
           </>

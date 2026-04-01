@@ -114,6 +114,19 @@ CREATE TABLE IF NOT EXISTS report_ratings (
     rated_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(user_id, date)
 );
+
+CREATE TABLE IF NOT EXISTS app_settings (
+    key VARCHAR(100) PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT ''
+);
+
+INSERT INTO app_settings (key, value) VALUES
+    ('group_chat_id',          ''),
+    ('notify_tasks',           'true'),
+    ('notify_attendance',      'true'),
+    ('notify_announcements',   'true'),
+    ('notify_reports',         'true')
+ON CONFLICT (key) DO NOTHING;
 """
 
 

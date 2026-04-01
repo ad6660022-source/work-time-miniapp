@@ -80,6 +80,18 @@ async def create_task(body: CreateTaskBody, x_init_data: str = Header(...), requ
                 f"📌 <b>Новая задача!</b>\n\n{body.text}\n\nОткройте приложение для просмотра."
             )
 
+    # Уведомление в группу
+    if await db.get_setting(pool, "notify_tasks") == "true":
+        group_id = await db.get_setting(pool, "group_chat_id")
+        if group_id:
+            preview = body.text[:200] + ("…" if len(body.text) > 200 else "")
+            assignees_count = len(body.assignee_ids)
+            from app.bot import send_to_group
+            await send_to_group(
+                group_id,
+                f"📌 <b>Новая задача</b> (от {user['name']})\n\n{preview}\n\n👥 Назначено: {assignees_count} чел."
+            )
+
     return {"task": _serialize_detail(await db.get_task_with_assignees(pool, task["id"]))}
 
 
@@ -151,6 +163,16 @@ async def update_status(
                 f"✅ <b>Задача выполнена!</b>\n\nИсполнитель: <b>{user['name']}</b>\n"
                 f"Задача: {preview}\n\nТребуется проверка ☝️"
             )
+
+        # Уведомление в группу
+        if await db.get_setting(pool, "notify_tasks") == "true":
+            group_id = await db.get_setting(pool, "group_chat_id")
+            if group_id:
+                from app.bot import send_to_group
+                await send_to_group(
+                    group_id,
+                    f"✅ <b>Задача выполнена</b>\n\nИсполнитель: {user['name']}\nЗадача: {preview}"
+                )
 
     return {"status": "ok"}
 

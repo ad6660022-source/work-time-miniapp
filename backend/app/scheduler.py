@@ -95,6 +95,46 @@ async def job_missing_reports(pool: asyncpg.Pool):
         )
 
 
+async def job_reports_summary(pool: asyncpg.Pool):
+    """Сводка отчётов за день в группу в 19:05."""
+    if await db.get_setting(pool, "notify_reports") != "true":
+        return
+    group_id = await db.get_setting(pool, "group_chat_id")
+    if not group_id:
+        return
+
+    today = datetime.now(MOSCOW_TZ).date()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT done, problems, plans FROM daily_reports WHERE date=$1",
+            today
+        )
+
+    if not rows:
+        return
+
+    done_items    = [r["done"]     for r in rows if r["done"]     and r["done"]     != "—"]
+    problem_items = [r["problems"] for r in rows if r["problems"] and r["problems"] != "—"]
+    plan_items    = [r["plans"]    for r in rows if r["plans"]    and r["plans"]    != "—"]
+
+    lines = [f"📊 <b>Итоги дня {today.strftime('%d.%m.%Y')}:</b>\n"]
+    if done_items:
+        lines.append("✅ <b>Что сделано:</b>")
+        for item in done_items:
+            lines.append(f"— {item}")
+    if problem_items:
+        lines.append("\n⚠️ <b>Проблемы:</b>")
+        for item in problem_items:
+            lines.append(f"— {item}")
+    if plan_items:
+        lines.append("\n📅 <b>Планы на завтра:</b>")
+        for item in plan_items:
+            lines.append(f"— {item}")
+
+    from app.bot import send_to_group
+    await send_to_group(group_id, "\n".join(lines))
+
+
 async def job_attendance_expiry(pool: asyncpg.Pool):
     check = await db.get_active_attendance_check(pool)
     if not check:
@@ -124,10 +164,15 @@ async def job_attendance_expiry(pool: asyncpg.Pool):
 
     initiator = await db.get_user_by_id(pool, check["initiated_by"])
     admins = await db.get_admins(pool)
-    from app.bot import send_message_to_user
+    from app.bot import send_message_to_user, send_to_group
     for admin in admins:
         await db.create_notification(pool, admin["id"], f"📍 Проверка завершена. На месте: {len(responses)}/{len(employees)}", "attendance")
         await send_message_to_user(admin["telegram_id"], text)
+
+    # Итог проверки в группу
+    if await db.get_setting(pool, "notify_attendance") == "true":
+        group_id = await db.get_setting(pool, "group_chat_id")
+        await send_to_group(group_id, text)
 
 
 def setup_scheduler(pool: asyncpg.Pool) -> AsyncIOScheduler:
@@ -142,6 +187,8 @@ def setup_scheduler(pool: asyncpg.Pool) -> AsyncIOScheduler:
                       args=[pool], id="close_shifts")
     scheduler.add_job(job_missing_reports, CronTrigger(hour=19, minute=30, timezone=MOSCOW_TZ),
                       args=[pool], id="missing_reports")
+    scheduler.add_job(job_reports_summary, CronTrigger(hour=19, minute=5, timezone=MOSCOW_TZ),
+                      args=[pool], id="reports_summary")
     scheduler.add_job(job_attendance_expiry, CronTrigger(minute="*", timezone=MOSCOW_TZ),
                       args=[pool], id="attendance_expiry")
     return scheduler

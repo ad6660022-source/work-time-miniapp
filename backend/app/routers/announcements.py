@@ -46,4 +46,14 @@ async def send_announcement(
         )
         sent += 1
 
+    # Уведомление в группу
+    if await db.get_setting(pool, "notify_announcements") == "true":
+        group_id = await db.get_setting(pool, "group_chat_id")
+        if group_id:
+            from app.bot import send_to_group
+            await send_to_group(
+                group_id,
+                f"📢 <b>Объявление от {user['name']}:</b>\n\n{text}"
+            )
+
     return {"sent": sent}

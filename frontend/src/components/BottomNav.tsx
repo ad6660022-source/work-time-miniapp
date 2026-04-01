@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Home, CheckSquare, BarChart2, FileText, Bell, Users } from 'lucide-react'
+import { Home, CheckSquare, BarChart2, FileText, Bell, Users, Settings } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 
@@ -33,6 +33,7 @@ export default function BottomNav({ isAdmin }: Props) {
     { path: '/admin/employees', icon: Users,       label: 'Команда' },
     { path: '/admin/tasks',     icon: CheckSquare, label: 'Задачи' },
     { path: '/admin/reports',   icon: FileText,    label: 'Отчёты' },
+    { path: '/admin/settings',  icon: Settings,    label: 'Настройки' },
     { path: '/notifs',          icon: Bell,        label: 'Уведомления', badge: unread },
   ]
 

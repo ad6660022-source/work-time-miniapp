@@ -84,6 +84,22 @@ export const api = {
   announcements: {
     send: (text: string) => post<{ sent: number }>('/announcements', { text }),
   },
+  settings: {
+    get: () => get<{
+      group_chat_id: string
+      notify_tasks: boolean
+      notify_attendance: boolean
+      notify_announcements: boolean
+      notify_reports: boolean
+    }>('/settings'),
+    save: (data: {
+      group_chat_id?: string
+      notify_tasks?: boolean
+      notify_attendance?: boolean
+      notify_announcements?: boolean
+      notify_reports?: boolean
+    }) => post<{ status: string }>('/settings', data),
+  },
   attendance: {
     startCheck: () => post<{ check_id: number; expires_at: string }>('/attendance/check'),
     respond: () => post<{ status: string }>('/attendance/respond'),

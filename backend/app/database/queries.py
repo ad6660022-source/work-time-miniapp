@@ -710,3 +710,26 @@ async def get_unread_count(pool: asyncpg.Pool, user_id: int) -> int:
         return await conn.fetchval(
             "SELECT COUNT(*) FROM notifications WHERE user_id=$1 AND is_read=FALSE", user_id
         )
+
+
+# ─── APP SETTINGS ─────────────────────────────────────────────────────────────
+
+async def get_setting(pool: asyncpg.Pool, key: str) -> str:
+    async with pool.acquire() as conn:
+        val = await conn.fetchval("SELECT value FROM app_settings WHERE key=$1", key)
+        return val or ""
+
+
+async def get_all_settings(pool: asyncpg.Pool) -> dict:
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT key, value FROM app_settings")
+        return {r["key"]: r["value"] for r in rows}
+
+
+async def set_setting(pool: asyncpg.Pool, key: str, value: str) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """INSERT INTO app_settings (key, value) VALUES ($1, $2)
+               ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value""",
+            key, value
+        )

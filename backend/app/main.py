@@ -13,7 +13,7 @@ from app.config import settings
 from app.database.connection import create_pool
 from app.database.init_db import init_database
 from app.scheduler import setup_scheduler
-from app.routers import auth, shifts, tasks, users, reports, attendance, announcements
+from app.routers import auth, shifts, tasks, users, reports, attendance, announcements, settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -73,6 +73,7 @@ app.include_router(users.router)
 app.include_router(reports.router)
 app.include_router(attendance.router)
 app.include_router(announcements.router)
+app.include_router(settings.router)
 
 
 # ── Serve React frontend ──────────────────────────────────────────────────────

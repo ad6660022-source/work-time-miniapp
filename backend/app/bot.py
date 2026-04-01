@@ -37,6 +37,19 @@ async def send_to_admins(admins: list, text: str) -> None:
         await send_message_to_user(admin["telegram_id"], text)
 
 
+async def send_to_group(chat_id: str, text: str) -> None:
+    """Отправить сообщение в группу. chat_id — строка вида '-1001234567890'."""
+    if not chat_id:
+        return
+    bot = get_bot()
+    if not bot:
+        return
+    try:
+        await bot.send_message(int(chat_id), text)
+    except Exception as e:
+        logger.warning(f"Failed to send group message to {chat_id}: {e}")
+
+
 async def run_bot(pool) -> None:
     global _bot
 
