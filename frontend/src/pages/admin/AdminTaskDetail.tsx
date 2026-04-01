@@ -21,12 +21,23 @@ export default function AdminTaskDetail() {
   const [editText, setEditText] = useState('')
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
+  const [myId, setMyId] = useState<number | null>(null)
+  const [myStatus, setMyStatus] = useState<string>('')
+  const [statusLoading, setStatusLoading] = useState(false)
 
   useEffect(() => {
+    api.auth.me().then(r => { if (r.user) setMyId(r.user.id) })
     api.tasks.detail(Number(id))
       .then(r => { setTask(r.task); setEditText(r.task.text) })
       .catch(() => nav('/admin/tasks'))
   }, [id])
+
+  useEffect(() => {
+    if (task && myId) {
+      const mine = task.assignees.find(a => a.id === myId)
+      if (mine) setMyStatus(mine.status)
+    }
+  }, [task, myId])
 
   if (!task) return <div className="loader"><div className="spinner" /></div>
 
@@ -54,6 +65,21 @@ export default function AdminTaskDetail() {
       haptic.success()
       nav('/admin/tasks')
     } catch (e: any) { setMsg('Ошибка: ' + e.message) }
+  }
+
+  const updateStatus = async (status: string) => {
+    if (statusLoading) return
+    setStatusLoading(true)
+    try {
+      await api.tasks.updateStatus(task.id, status)
+      setMyStatus(status)
+      setTask(prev => prev ? {
+        ...prev,
+        assignees: prev.assignees.map(a => a.id === myId ? { ...a, status } : a)
+      } : prev)
+      haptic.success()
+    } catch (e: any) { setMsg('Ошибка: ' + e.message) }
+    setStatusLoading(false)
   }
 
   return (
@@ -103,6 +129,28 @@ export default function AdminTaskDetail() {
           <p style={{ fontSize: 16, lineHeight: 1.65 }}>{task.text}</p>
         )}
       </div>
+
+      {/* My action — shown only if admin is an assignee */}
+      {myStatus && myStatus !== 'done' && (
+        <div className="glass card" style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 14, fontWeight: 600 }}>МОЁ ДЕЙСТВИЕ</div>
+          {myStatus === 'assigned' && (
+            <button className="btn btn-primary btn-full" onClick={() => updateStatus('in_progress')} disabled={statusLoading}>
+              🔄 Взять в работу
+            </button>
+          )}
+          {myStatus === 'in_progress' && (
+            <button className="btn btn-green btn-full" onClick={() => updateStatus('done')} disabled={statusLoading}>
+              ✅ Отметить выполненной
+            </button>
+          )}
+        </div>
+      )}
+      {myStatus === 'done' && (
+        <div className="alert alert-success" style={{ marginBottom: 12 }}>
+          ✅ Вы выполнили задачу.
+        </div>
+      )}
 
       {/* Progress */}
       <div className="glass card" style={{ marginBottom: 12 }}>
