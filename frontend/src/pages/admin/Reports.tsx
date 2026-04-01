@@ -14,8 +14,12 @@ function MyReport() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [existing, setExisting] = useState(false)
+  const [shiftClosed, setShiftClosed] = useState<boolean | null>(null)
 
   useEffect(() => {
+    api.shifts.today().then(r => {
+      setShiftClosed(r.shift?.status === 'closed')
+    }).catch(() => setShiftClosed(false))
     api.reports.today().then(r => {
       if (r.report) {
         setExisting(true)
@@ -34,6 +38,18 @@ function MyReport() {
       setStep('submitted')
     } catch (e: any) { setError(e.message) }
     setLoading(false)
+  }
+
+  if (shiftClosed === false && step !== 'submitted') {
+    return (
+      <div className="glass card slide-up" style={{ textAlign: 'center', padding: '40px 20px' }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
+        <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Смена ещё не завершена</div>
+        <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
+          Отчёт можно написать после завершения рабочего дня
+        </div>
+      </div>
+    )
   }
 
   if (step === 'submitted') {

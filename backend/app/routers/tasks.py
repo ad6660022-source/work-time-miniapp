@@ -13,6 +13,10 @@ class CreateTaskBody(BaseModel):
     assignee_ids: List[int]
 
 
+class UpdateTaskBody(BaseModel):
+    text: str
+
+
 @router.get("/my")
 async def get_my_tasks(x_init_data: str = Header(...), request: Request = None):
     pool = request.app.state.pool
@@ -77,6 +81,43 @@ async def create_task(body: CreateTaskBody, x_init_data: str = Header(...), requ
             )
 
     return {"task": _serialize_detail(await db.get_task_with_assignees(pool, task["id"]))}
+
+
+@router.put("/{task_id}")
+async def edit_task(task_id: int, body: UpdateTaskBody, x_init_data: str = Header(...), request: Request = None):
+    pool = request.app.state.pool
+    tg_user = validate_init_data(x_init_data)
+    user = await db.get_user(pool, tg_user["id"])
+    if not user or not user["is_admin"]:
+        raise HTTPException(403)
+    if not body.text.strip():
+        raise HTTPException(400, "Empty task text")
+    task = await db.update_task(pool, task_id, body.text.strip())
+    if not task:
+        raise HTTPException(404)
+    return {"task": _serialize_detail(await db.get_task_with_assignees(pool, task_id))}
+
+
+@router.delete("/{task_id}")
+async def delete_task(task_id: int, x_init_data: str = Header(...), request: Request = None):
+    pool = request.app.state.pool
+    tg_user = validate_init_data(x_init_data)
+    user = await db.get_user(pool, tg_user["id"])
+    if not user or not user["is_admin"]:
+        raise HTTPException(403)
+    await db.archive_task(pool, task_id)
+    return {"status": "ok"}
+
+
+@router.delete("")
+async def clear_completed_tasks(x_init_data: str = Header(...), request: Request = None):
+    pool = request.app.state.pool
+    tg_user = validate_init_data(x_init_data)
+    user = await db.get_user(pool, tg_user["id"])
+    if not user or not user["is_admin"]:
+        raise HTTPException(403)
+    count = await db.archive_completed_tasks(pool)
+    return {"archived": count}
 
 
 @router.patch("/{task_id}/status")

@@ -1,6 +1,6 @@
 import asyncpg
 import pytz
-from datetime import datetime, date as date_type
+from datetime import datetime, timedelta, date as date_type
 from typing import Optional, List
 
 MOSCOW_TZ = pytz.timezone("Europe/Moscow")
@@ -134,18 +134,37 @@ async def update_schedule(
 async def start_shift(pool: asyncpg.Pool, user_id: int) -> dict:
     now = datetime.now(MOSCOW_TZ)
     today = now.date()
-    start_time = MOSCOW_TZ.localize(
-        datetime(today.year, today.month, today.day, 9, 0, 0)
-    ) if now.hour < 9 else now
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """INSERT INTO shifts (user_id, date, start_time, status)
-               VALUES ($1, $2, $3, 'active')
-               ON CONFLICT (user_id, date) DO UPDATE
-               SET start_time=EXCLUDED.start_time, status='active', end_time=NULL
-               RETURNING *""",
-            user_id, today, start_time
+        existing = await conn.fetchrow(
+            "SELECT * FROM shifts WHERE user_id=$1 AND date=$2", user_id, today
         )
+        if existing and existing["status"] == "closed":
+            # Resume: preserve previously worked time
+            prev_start = existing["start_time"]
+            prev_end = existing["end_time"]
+            if prev_start and prev_end:
+                worked_seconds = int((prev_end - prev_start).total_seconds())
+            else:
+                worked_seconds = 0
+            virtual_start = now - timedelta(seconds=worked_seconds)
+            row = await conn.fetchrow(
+                """UPDATE shifts SET start_time=$1, status='active', end_time=NULL
+                   WHERE user_id=$2 AND date=$3
+                   RETURNING *""",
+                virtual_start, user_id, today
+            )
+        else:
+            start_time = MOSCOW_TZ.localize(
+                datetime(today.year, today.month, today.day, 9, 0, 0)
+            ) if now.hour < 9 else now
+            row = await conn.fetchrow(
+                """INSERT INTO shifts (user_id, date, start_time, status)
+                   VALUES ($1, $2, $3, 'active')
+                   ON CONFLICT (user_id, date) DO UPDATE
+                   SET start_time=EXCLUDED.start_time, status='active', end_time=NULL
+                   RETURNING *""",
+                user_id, today, start_time
+            )
         return dict(row)
 
 
@@ -159,6 +178,25 @@ async def end_shift(pool: asyncpg.Pool, user_id: int) -> Optional[dict]:
             now, user_id, now.date()
         )
         return dict(row) if row else None
+
+
+async def get_user_shifts_history(pool: asyncpg.Pool, user_id: int) -> list:
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM shifts WHERE user_id=$1 ORDER BY date DESC LIMIT 60",
+            user_id
+        )
+        return [dict(r) for r in rows]
+
+
+async def delete_user_shifts_history(pool: asyncpg.Pool, user_id: int) -> int:
+    today = datetime.now(MOSCOW_TZ).date()
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM shifts WHERE user_id=$1 AND date < $2 AND status='closed'",
+            user_id, today
+        )
+        return int(result.split()[-1])
 
 
 async def get_today_shift(pool: asyncpg.Pool, user_id: int) -> Optional[dict]:
@@ -251,6 +289,46 @@ async def update_task_assignment_status(
         )
 
 
+async def update_task(pool: asyncpg.Pool, task_id: int, text: str) -> Optional[dict]:
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "UPDATE tasks SET text=$1 WHERE id=$2 RETURNING *", text, task_id
+        )
+        return dict(row) if row else None
+
+
+async def archive_task(pool: asyncpg.Pool, task_id: int) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE tasks SET status='archived' WHERE id=$1", task_id)
+
+
+async def archive_completed_tasks(pool: asyncpg.Pool) -> int:
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            """UPDATE tasks SET status='archived'
+               WHERE status='active'
+               AND id IN (
+                   SELECT ta.task_id FROM task_assignments ta
+                   GROUP BY ta.task_id
+                   HAVING COUNT(*) = COUNT(CASE WHEN ta.status='done' THEN 1 END)
+               )
+               AND EXISTS (SELECT 1 FROM task_assignments ta2 WHERE ta2.task_id=tasks.id)"""
+        )
+        return int(result.split()[-1])
+
+
+async def get_user_tasks_all(pool: asyncpg.Pool, user_id: int) -> List[dict]:
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT t.id, t.text, t.created_at, ta.status as assignment_status, ta.updated_at
+               FROM tasks t JOIN task_assignments ta ON t.id=ta.task_id
+               WHERE ta.user_id=$1
+               ORDER BY t.created_at DESC""",
+            user_id
+        )
+        return [dict(r) for r in rows]
+
+
 async def get_all_active_tasks(pool: asyncpg.Pool) -> List[dict]:
     async with pool.acquire() as conn:
         rows = await conn.fetch(
@@ -293,6 +371,15 @@ async def get_employee_task_stats(pool: asyncpg.Pool, user_id: int) -> dict:
 
 
 # ─── REPORTS ─────────────────────────────────────────────────────────────────
+
+async def get_user_reports_history(pool: asyncpg.Pool, user_id: int) -> List[dict]:
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM daily_reports WHERE user_id=$1 ORDER BY date DESC LIMIT 60",
+            user_id
+        )
+        return [dict(r) for r in rows]
+
 
 async def upsert_report(
     pool: asyncpg.Pool, user_id: int, report_date: date_type,

@@ -104,6 +104,22 @@ async def get_active(x_init_data: str = Header(...), request: Request = None):
     }
 
 
+@router.post("/cancel")
+async def cancel_check(x_init_data: str = Header(...), request: Request = None):
+    pool = request.app.state.pool
+    tg_user = validate_init_data(x_init_data)
+    admin = await db.get_user(pool, tg_user["id"])
+    if not admin or not admin["is_admin"]:
+        raise HTTPException(403)
+
+    check = await db.get_active_attendance_check(pool)
+    if not check:
+        raise HTTPException(400, "No active check")
+
+    await db.close_attendance_check(pool, check["id"])
+    return {"status": "ok"}
+
+
 @router.get("/notifications")
 async def get_notifications(x_init_data: str = Header(...), request: Request = None):
     pool = request.app.state.pool

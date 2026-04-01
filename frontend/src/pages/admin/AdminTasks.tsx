@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, Plus, X } from 'lucide-react'
+import { ChevronRight, Plus, X, Trash2 } from 'lucide-react'
 import { api } from '../../api'
 import { useTelegram } from '../../hooks/useTelegram'
 import type { AdminTask, User } from '../../types'
@@ -53,12 +53,28 @@ export default function AdminTasks() {
           <div className="page-title">Задачи</div>
           <div className="page-subtitle">{tasks.length} активных</div>
         </div>
-        <button
-          className="btn btn-primary btn-sm"
-          onClick={() => { setShowCreate(!showCreate); setError('') }}
-        >
-          {showCreate ? <X size={16} /> : <><Plus size={16} /> Создать</>}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="btn btn-glass btn-sm"
+            title="Очистить выполненные"
+            onClick={async () => {
+              if (!confirm('Архивировать все полностью выполненные задачи?')) return
+              try {
+                const r = await api.tasks.clearCompleted()
+                haptic.success()
+                await load()
+              } catch {}
+            }}
+          >
+            <Trash2 size={16} />
+          </button>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={() => { setShowCreate(!showCreate); setError('') }}
+          >
+            {showCreate ? <X size={16} /> : <><Plus size={16} /> Создать</>}
+          </button>
+        </div>
       </div>
 
       {/* Create panel */}

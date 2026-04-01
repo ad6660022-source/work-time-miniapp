@@ -19,9 +19,10 @@ async def job_lateness(pool: asyncpg.Pool, threshold_minute: int, notify_admin: 
 
     for emp in employees:
         sched = await db.get_schedule(pool, emp["id"])
-        if not sched:
-            continue
-        work_days = list(sched["work_days"]) if sched.get("work_days") else []
+        if sched and sched.get("work_days"):
+            work_days = list(sched["work_days"])
+        else:
+            work_days = [0, 1, 2, 3, 4]  # default Mon–Fri
         if weekday not in work_days:
             continue
         shift = await db.get_today_shift(pool, emp["id"])

@@ -30,6 +30,7 @@ const get = <T>(path: string) => request<T>('GET', path)
 const post = <T>(path: string, body?: unknown) => request<T>('POST', path, body)
 const patch = <T>(path: string, body?: unknown) => request<T>('PATCH', path, body)
 const put = <T>(path: string, body?: unknown) => request<T>('PUT', path, body)
+const del = <T>(path: string) => request<T>('DELETE', path)
 
 // Auth
 export const api = {
@@ -49,6 +50,10 @@ export const api = {
     detail: (id: number) => get<{ task: import('./types').TaskDetail }>(`/tasks/${id}`),
     create: (text: string, assignee_ids: number[]) =>
       post<{ task: import('./types').TaskDetail }>('/tasks', { text, assignee_ids }),
+    update: (id: number, text: string) =>
+      put<{ task: import('./types').TaskDetail }>(`/tasks/${id}`, { text }),
+    delete: (id: number) => del<{ status: string }>(`/tasks/${id}`),
+    clearCompleted: () => del<{ archived: number }>('/tasks'),
     updateStatus: (id: number, status: string) =>
       patch<{ status: string }>(`/tasks/${id}/status`, { status }),
   },
@@ -62,6 +67,8 @@ export const api = {
     schedule: (id: number) => get<{ schedule: { work_days: number[]; shift_start: string; shift_end: string } | null }>(`/users/${id}/schedule`),
     updateSchedule: (id: number, data: { work_days: number[]; shift_start: string; shift_end: string }) =>
       put(`/users/${id}/schedule`, data),
+    history: (id: number) => get<import('./types').UserHistory>(`/users/${id}/history`),
+    clearShifts: (id: number) => del<{ deleted: number }>(`/users/${id}/shifts`),
   },
   reports: {
     today: () => get<{ report: import('./types').Report | null }>('/reports/today'),
@@ -73,6 +80,7 @@ export const api = {
   attendance: {
     startCheck: () => post<{ check_id: number; expires_at: string }>('/attendance/check'),
     respond: () => post<{ status: string }>('/attendance/respond'),
+    cancel: () => post<{ status: string }>('/attendance/cancel'),
     active: () => get<{ check: { id: number; seconds_left: number; user_responded: boolean; responses: { name: string }[] } | null }>('/attendance/active'),
     notifications: () => get<{ notifications: import('./types').Notification[]; unread_count: number }>('/attendance/notifications'),
     markRead: () => post('/attendance/notifications/read'),

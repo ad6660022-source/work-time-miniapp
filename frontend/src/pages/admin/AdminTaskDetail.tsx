@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Pencil, Trash2 } from 'lucide-react'
 import { api } from '../../api'
+import { useTelegram } from '../../hooks/useTelegram'
 import type { TaskDetail } from '../../types'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -14,11 +15,16 @@ const STATUS_CLASS: Record<string, string> = {
 export default function AdminTaskDetail() {
   const { id } = useParams<{ id: string }>()
   const nav = useNavigate()
+  const { haptic } = useTelegram()
   const [task, setTask] = useState<TaskDetail | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [editText, setEditText] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
 
   useEffect(() => {
     api.tasks.detail(Number(id))
-      .then(r => setTask(r.task))
+      .then(r => { setTask(r.task); setEditText(r.task.text) })
       .catch(() => nav('/admin/tasks'))
   }, [id])
 
@@ -27,6 +33,28 @@ export default function AdminTaskDetail() {
   const total = task.assignees.length
   const done  = task.assignees.filter(a => a.status === 'done').length
   const donePct = total ? Math.round(done / total * 100) : 0
+
+  const saveEdit = async () => {
+    if (!editText.trim()) return
+    setSaving(true)
+    try {
+      const r = await api.tasks.update(task.id, editText.trim())
+      setTask(r.task)
+      setEditing(false)
+      setMsg('Задача обновлена')
+      haptic.success()
+    } catch (e: any) { setMsg('Ошибка: ' + e.message) }
+    setSaving(false)
+  }
+
+  const deleteTask = async () => {
+    if (!confirm('Удалить задачу?')) return
+    try {
+      await api.tasks.delete(task.id)
+      haptic.success()
+      nav('/admin/tasks')
+    } catch (e: any) { setMsg('Ошибка: ' + e.message) }
+  }
 
   return (
     <div className="page fade-in">
@@ -40,10 +68,40 @@ export default function AdminTaskDetail() {
             {new Date(task.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
           </div>
         </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-glass btn-sm" onClick={() => setEditing(!editing)} style={{ padding: '10px' }}>
+            <Pencil size={16} />
+          </button>
+          <button className="btn btn-glass btn-sm" onClick={deleteTask} style={{ padding: '10px', color: 'var(--red)' }}>
+            <Trash2 size={16} />
+          </button>
+        </div>
       </div>
 
+      {msg && <div className="alert alert-success" style={{ marginBottom: 12 }}>{msg}</div>}
+
       <div className="glass card slide-up" style={{ marginBottom: 12 }}>
-        <p style={{ fontSize: 16, lineHeight: 1.65 }}>{task.text}</p>
+        {editing ? (
+          <>
+            <textarea
+              className="input"
+              rows={5}
+              value={editText}
+              onChange={e => setEditText(e.target.value)}
+              autoFocus
+            />
+            <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+              <button className="btn btn-glass" style={{ flex: 1 }} onClick={() => { setEditing(false); setEditText(task.text) }}>
+                Отмена
+              </button>
+              <button className="btn btn-primary" style={{ flex: 2 }} onClick={saveEdit} disabled={saving}>
+                {saving ? 'Сохранение…' : '💾 Сохранить'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <p style={{ fontSize: 16, lineHeight: 1.65 }}>{task.text}</p>
+        )}
       </div>
 
       {/* Progress */}

@@ -220,12 +220,21 @@ export default function AdminDashboard({ userName }: Props) {
               <span className="badge badge-assigned">Активна</span>
             </div>
             {activeCheck.responses.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
                 {activeCheck.responses.map((r: any) => (
                   <span key={r.name} className="badge badge-done">✅ {r.name}</span>
                 ))}
               </div>
             )}
+            <button
+              className="btn btn-red btn-full"
+              style={{ marginTop: 4 }}
+              onClick={async () => {
+                try { await api.attendance.cancel(); await loadCheck(); haptic.error() } catch {}
+              }}
+            >
+              Отменить проверку
+            </button>
           </>
         ) : (
           <>

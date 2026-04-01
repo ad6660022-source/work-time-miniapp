@@ -1,3 +1,4 @@
+import pytz
 from fastapi import APIRouter, Request, Header, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
@@ -117,6 +118,68 @@ async def get_schedule(user_id: int, x_init_data: str = Header(...), request: Re
         "shift_start": str(sched["shift_start"])[:5],
         "shift_end": str(sched["shift_end"])[:5],
     }}
+
+
+@router.get("/{user_id}/history")
+async def get_history(user_id: int, x_init_data: str = Header(...), request: Request = None):
+    pool = request.app.state.pool
+    tg_user = validate_init_data(x_init_data)
+    user = await db.get_user(pool, tg_user["id"])
+    if not user or not user["is_admin"]:
+        raise HTTPException(403)
+    shifts = await db.get_user_shifts_history(pool, user_id)
+    reports = await db.get_user_reports_history(pool, user_id)
+    tasks = await db.get_user_tasks_all(pool, user_id)
+    tz = pytz.timezone("Europe/Moscow")
+
+    def fmt_dt(dt):
+        if not dt:
+            return None
+        if dt.tzinfo is None:
+            dt = tz.localize(dt)
+        return dt.astimezone(tz).strftime("%H:%M")
+
+    return {
+        "shifts": [
+            {
+                "id": s["id"], "date": str(s["date"]),
+                "start_time": fmt_dt(s.get("start_time")),
+                "end_time": fmt_dt(s.get("end_time")),
+                "status": s["status"],
+                "duration_minutes": (
+                    int((s["end_time"] - s["start_time"]).total_seconds() / 60)
+                    if s.get("start_time") and s.get("end_time") else None
+                ),
+            }
+            for s in shifts
+        ],
+        "reports": [
+            {
+                "date": str(r["date"]),
+                "done": r.get("done"), "problems": r.get("problems"), "plans": r.get("plans"),
+            }
+            for r in reports
+        ],
+        "tasks": [
+            {
+                "id": t["id"], "text": t["text"],
+                "status": t["assignment_status"],
+                "created_at": t["created_at"].isoformat() if t.get("created_at") else None,
+            }
+            for t in tasks
+        ],
+    }
+
+
+@router.delete("/{user_id}/shifts")
+async def clear_shifts(user_id: int, x_init_data: str = Header(...), request: Request = None):
+    pool = request.app.state.pool
+    tg_user = validate_init_data(x_init_data)
+    admin = await db.get_user(pool, tg_user["id"])
+    if not admin or not admin["is_admin"]:
+        raise HTTPException(403)
+    count = await db.delete_user_shifts_history(pool, user_id)
+    return {"deleted": count}
 
 
 @router.put("/{user_id}/schedule")

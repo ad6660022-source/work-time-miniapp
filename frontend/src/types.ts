@@ -78,3 +78,26 @@ export interface Stats {
   late_count: number
   shifts_month: number
 }
+
+export interface UserHistory {
+  shifts: {
+    id: number
+    date: string
+    start_time?: string
+    end_time?: string
+    status: string
+    duration_minutes?: number
+  }[]
+  reports: {
+    date: string
+    done?: string
+    problems?: string
+    plans?: string
+  }[]
+  tasks: {
+    id: number
+    text: string
+    status: string
+    created_at: string
+  }[]
+}
