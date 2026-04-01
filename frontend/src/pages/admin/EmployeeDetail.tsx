@@ -241,7 +241,7 @@ export default function EmployeeDetail() {
           {/* Stats */}
           {stats && (
             <>
-              <div className="section-label">Статистика</div>
+              <div className="section-label">Статистика задач</div>
               <div className="glass card" style={{ marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
                   {[
@@ -258,10 +258,59 @@ export default function EmployeeDetail() {
                 <div className="progress-bar">
                   <div className="progress-fill" style={{ width: `${donePct}%` }} />
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
-                  <span>Опоздания: {stats.late_count}</span>
-                  <span>Смен/мес: {stats.shifts_month}</span>
+              </div>
+
+              <div className="section-label">Рабочее время</div>
+              <div className="glass card" style={{ marginBottom: 12 }}>
+                <div className="stats-grid" style={{ gap: 10 }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--accent-2)' }}>
+                      {Math.floor((stats.total_work_minutes || 0) / 60)}ч {(stats.total_work_minutes || 0) % 60}м
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Отработано</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--green)' }}>
+                      {stats.shifts_month}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Смен/мес</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--red)' }}>
+                      {stats.late_count}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Опозданий</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--amber)' }}>
+                      {stats.late_count > 0
+                        ? `${Math.floor((stats.late_minutes || 0) / 60)}ч ${(stats.late_minutes || 0) % 60}м`
+                        : '—'}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Время опозд.</div>
+                  </div>
                 </div>
+              </div>
+
+              <div className="section-label">Оценки отчётов</div>
+              <div className="glass card" style={{ marginBottom: 12 }}>
+                {stats.avg_rating != null ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div style={{ fontSize: 44, fontWeight: 900, color: 'var(--amber)', lineHeight: 1 }}>
+                      {stats.avg_rating}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 20, color: 'var(--amber)', letterSpacing: 2 }}>
+                        {'★'.repeat(Math.round(stats.avg_rating))}{'☆'.repeat(5 - Math.round(stats.avg_rating))}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                        средняя оценка отчётов
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>Отчёты ещё не оценивались</div>
+                )}
               </div>
             </>
           )}

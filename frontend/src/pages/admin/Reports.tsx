@@ -4,6 +4,71 @@ import { ArrowLeft, ChevronRight, Calendar, CheckCircle } from 'lucide-react'
 import { api } from '../../api'
 import type { AdminReport } from '../../types'
 
+// Компонент звёздной оценки
+function StarRating({
+  date, userId, current, onRate,
+}: { date: string; userId: number; current: number | null | undefined; onRate: (r: number) => void }) {
+  const [hover, setHover] = useState<number | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const steps = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]
+
+  const doRate = async (rating: number) => {
+    if (saving) return
+    setSaving(true)
+    try {
+      await api.reports.rate(date, userId, rating)
+      onRate(rating)
+    } catch {}
+    setSaving(false)
+  }
+
+  const displayed = hover ?? current ?? 0
+
+  return (
+    <div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600, letterSpacing: '0.5px' }}>
+        ОЦЕНКА ОТЧЁТА
+      </div>
+      <div style={{ display: 'flex', gap: 3, alignItems: 'center', flexWrap: 'wrap' }}>
+        {steps.map(v => {
+          const full = Math.floor(v)
+          const isHalf = v % 1 !== 0
+          const filled = displayed >= v
+          const halfFilled = !filled && displayed >= v - 0.5 && isHalf
+
+          return (
+            <button
+              key={v}
+              onClick={() => doRate(v)}
+              onMouseEnter={() => setHover(v)}
+              onMouseLeave={() => setHover(null)}
+              disabled={saving}
+              style={{
+                width: isHalf ? 14 : 26, height: 26,
+                background: 'none', border: 'none', cursor: 'pointer',
+                padding: 0, fontSize: isHalf ? 12 : 20,
+                color: filled ? '#fbbf24' : halfFilled ? '#fbbf24' : 'rgba(255,255,255,0.2)',
+                transition: 'color 0.15s',
+                overflow: 'hidden',
+                display: 'flex', alignItems: 'center', justifyContent: isHalf ? 'flex-start' : 'center',
+              }}
+              title={`${v} ★`}
+            >
+              {isHalf ? '◐' : '★'}
+            </button>
+          )
+        })}
+        {current != null && (
+          <span style={{ fontSize: 13, color: 'var(--amber)', fontWeight: 700, marginLeft: 4 }}>
+            {current} ★
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Мой отчёт (для админа — та же форма что у сотрудника) ──────────────────
 function MyReport() {
   type Step = 'done' | 'problems' | 'plans' | 'submitted'
@@ -212,6 +277,10 @@ export function ReportsByDate() {
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<number | null>(null)
 
+  const handleRate = (userId: number, rating: number) => {
+    setReports(prev => prev.map(r => r.user_id === userId ? { ...r, rating } : r))
+  }
+
   useEffect(() => {
     api.reports.byDate(date!)
       .then(r => setReports(r.reports))
@@ -264,11 +333,16 @@ export function ReportsByDate() {
                   <div className="list-item-title">{r.name}</div>
                   <div className="list-item-subtitle">{r.position || '—'}</div>
                 </div>
-                <ChevronRight
-                  size={16}
-                  className="list-item-right"
-                  style={{ transform: expanded === i ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }}
-                />
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                  {r.rating != null && (
+                    <span style={{ fontSize: 12, color: 'var(--amber)', fontWeight: 700 }}>{r.rating} ★</span>
+                  )}
+                  <ChevronRight
+                    size={16}
+                    className="list-item-right"
+                    style={{ transform: expanded === i ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }}
+                  />
+                </div>
               </div>
 
               {/* Body */}
@@ -278,6 +352,13 @@ export function ReportsByDate() {
                   <ReportBlock emoji="✅" label="Что сделано" text={r.done} />
                   <ReportBlock emoji="⚠️" label="Проблемы" text={r.problems} />
                   <ReportBlock emoji="📅" label="Планы" text={r.plans} />
+                  <div className="divider" style={{ margin: '4px 0' }} />
+                  <StarRating
+                    date={date!}
+                    userId={r.user_id}
+                    current={r.rating}
+                    onRate={rating => handleRate(r.user_id, rating)}
+                  />
                 </div>
               )}
             </div>

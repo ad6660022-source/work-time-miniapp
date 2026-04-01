@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Shield, Users, Play, Square } from 'lucide-react'
+import { Shield, Users, Play, Square, Coffee, UtensilsCrossed } from 'lucide-react'
 import { api } from '../../api'
 import { useTelegram } from '../../hooks/useTelegram'
 import AttendanceBanner from '../../components/AttendanceBanner'
@@ -15,7 +15,9 @@ export default function AdminDashboard({ userName }: Props) {
   const [checkMsg, setCheckMsg] = useState('')
   const [shift, setShift] = useState<Shift | null | undefined>(undefined)
   const [elapsed, setElapsed] = useState('')
+  const [breakElapsed, setBreakElapsed] = useState('')
   const [shiftLoading, setShiftLoading] = useState(false)
+  const [breakLoading, setBreakLoading] = useState(false)
   const { haptic } = useTelegram()
 
   const load = useCallback(async () => {
@@ -46,6 +48,21 @@ export default function AdminDashboard({ userName }: Props) {
     const t2 = setInterval(loadCheck, 5_000)
     return () => { clearInterval(t1); clearInterval(t2) }
   }, [load, loadCheck, loadShift])
+
+  // Таймер перерыва
+  useEffect(() => {
+    if (!shift?.active_break) { setBreakElapsed(''); return }
+    const startTs = new Date(shift.active_break.start_time).getTime()
+    const tick = () => {
+      const diff = Math.max(0, Date.now() - startTs)
+      const mins = Math.floor(diff / 60_000)
+      const secs = Math.floor((diff % 60_000) / 1000)
+      setBreakElapsed(`${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`)
+    }
+    tick()
+    const t = setInterval(tick, 1000)
+    return () => clearInterval(t)
+  }, [shift?.active_break])
 
   // Live timer for admin shift
   useEffect(() => {
@@ -78,6 +95,20 @@ export default function AdminDashboard({ userName }: Props) {
     }, 1000)
     return () => clearInterval(t)
   }, [activeCheck, loadCheck])
+
+  const doBreakStart = async (type: 'lunch' | 'break') => {
+    if (breakLoading) return
+    setBreakLoading(true)
+    try { await api.shifts.breakStart(type); const r = await api.shifts.today(); setShift(r.shift); haptic.medium() }
+    catch {} finally { setBreakLoading(false) }
+  }
+
+  const doBreakEnd = async () => {
+    if (breakLoading) return
+    setBreakLoading(true)
+    try { await api.shifts.breakEnd(); const r = await api.shifts.today(); setShift(r.shift); haptic.success() }
+    catch {} finally { setBreakLoading(false) }
+  }
 
   const doStartShift = async () => {
     if (shiftLoading) return
@@ -139,23 +170,57 @@ export default function AdminDashboard({ userName }: Props) {
         {shift === undefined ? (
           <div className="loader" style={{ minHeight: 60 }}><div className="spinner" /></div>
         ) : isActive ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <div className="dot dot-green" />
-                <span style={{ fontSize: 13, color: 'var(--green)', fontWeight: 600 }}>СМЕНА ИДЁТ</span>
+          <>
+            {shift.active_break ? (
+              /* На перерыве */
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <div className="dot" style={{ background: 'var(--amber)', boxShadow: '0 0 8px var(--amber)' }} />
+                  <span style={{ fontSize: 13, color: 'var(--amber)', fontWeight: 600 }}>
+                    {shift.active_break.type === 'lunch' ? 'ОБЕД' : 'ОТОШЁЛ'} — {breakElapsed}
+                  </span>
+                </div>
+                <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: -1, lineHeight: 1, color: 'var(--amber)' }}>
+                  {elapsed || '00:00:00'}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, marginBottom: 10 }}>
+                  начало в {shift.start_time}
+                </div>
+                <button className="btn btn-green btn-full" onClick={doBreakEnd} disabled={breakLoading}>
+                  ✅ Вернулся
+                </button>
               </div>
-              <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: -1, lineHeight: 1 }} className="shift-pulse">
-                {elapsed || '00:00:00'}
+            ) : (
+              /* Смена идёт */
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <div className="dot dot-green" />
+                      <span style={{ fontSize: 13, color: 'var(--green)', fontWeight: 600 }}>СМЕНА ИДЁТ</span>
+                    </div>
+                    <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: -1, lineHeight: 1 }} className="shift-pulse">
+                      {elapsed || '00:00:00'}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                      начало в {shift.start_time}
+                    </div>
+                  </div>
+                  <button className="btn btn-red" onClick={doEndShift} disabled={shiftLoading}>
+                    <Square size={16} /> Завершить
+                  </button>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn-glass" style={{ flex: 1, fontSize: 13 }} onClick={() => doBreakStart('lunch')} disabled={breakLoading}>
+                    <UtensilsCrossed size={14} /> Обед
+                  </button>
+                  <button className="btn btn-glass" style={{ flex: 1, fontSize: 13 }} onClick={() => doBreakStart('break')} disabled={breakLoading}>
+                    <Coffee size={14} /> Отошёл
+                  </button>
+                </div>
               </div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
-                начало в {shift.start_time}
-              </div>
-            </div>
-            <button className="btn btn-red" onClick={doEndShift} disabled={shiftLoading}>
-              <Square size={16} /> Завершить
-            </button>
-          </div>
+            )}
+          </>
         ) : isClosed ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>

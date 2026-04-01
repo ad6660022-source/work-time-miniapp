@@ -95,6 +95,25 @@ CREATE TABLE IF NOT EXISTS notifications (
     is_read BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS shift_breaks (
+    id SERIAL PRIMARY KEY,
+    shift_id INTEGER REFERENCES shifts(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    type VARCHAR(20) DEFAULT 'break',
+    start_time TIMESTAMPTZ DEFAULT NOW(),
+    end_time TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS report_ratings (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    date DATE NOT NULL,
+    rating NUMERIC(2,1) NOT NULL,
+    rated_by INTEGER REFERENCES users(id),
+    rated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, date)
+);
 """
 
 

@@ -180,6 +180,158 @@ async def end_shift(pool: asyncpg.Pool, user_id: int) -> Optional[dict]:
         return dict(row) if row else None
 
 
+# ─── BREAKS ──────────────────────────────────────────────────────────────────
+
+async def start_break(pool: asyncpg.Pool, shift_id: int, user_id: int, break_type: str) -> dict:
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """INSERT INTO shift_breaks (shift_id, user_id, type)
+               VALUES ($1, $2, $3) RETURNING *""",
+            shift_id, user_id, break_type
+        )
+        return dict(row)
+
+
+async def end_break(pool: asyncpg.Pool, break_id: int) -> Optional[dict]:
+    now = datetime.now(MOSCOW_TZ)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "UPDATE shift_breaks SET end_time=$1 WHERE id=$2 RETURNING *",
+            now, break_id
+        )
+        return dict(row) if row else None
+
+
+async def get_active_break(pool: asyncpg.Pool, shift_id: int) -> Optional[dict]:
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM shift_breaks WHERE shift_id=$1 AND end_time IS NULL ORDER BY start_time DESC LIMIT 1",
+            shift_id
+        )
+        return dict(row) if row else None
+
+
+async def get_shift_breaks(pool: asyncpg.Pool, shift_id: int) -> List[dict]:
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM shift_breaks WHERE shift_id=$1 ORDER BY start_time",
+            shift_id
+        )
+        return [dict(r) for r in rows]
+
+
+async def close_all_open_breaks(pool: asyncpg.Pool, shift_id: int) -> None:
+    now = datetime.now(MOSCOW_TZ)
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE shift_breaks SET end_time=$1 WHERE shift_id=$2 AND end_time IS NULL",
+            now, shift_id
+        )
+
+
+# ─── RATINGS ─────────────────────────────────────────────────────────────────
+
+async def upsert_report_rating(
+    pool: asyncpg.Pool, user_id: int, report_date: date_type, rating: float, rated_by: int
+) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """INSERT INTO report_ratings (user_id, date, rating, rated_by, rated_at)
+               VALUES ($1, $2, $3, $4, NOW())
+               ON CONFLICT (user_id, date) DO UPDATE
+               SET rating=$3, rated_by=$4, rated_at=NOW()""",
+            user_id, report_date, rating, rated_by
+        )
+
+
+async def get_report_rating(pool: asyncpg.Pool, user_id: int, report_date: date_type) -> Optional[dict]:
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM report_ratings WHERE user_id=$1 AND date=$2",
+            user_id, report_date
+        )
+        return dict(row) if row else None
+
+
+async def get_ratings_by_date(pool: asyncpg.Pool, report_date: date_type) -> List[dict]:
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM report_ratings WHERE date=$1",
+            report_date
+        )
+        return [dict(r) for r in rows]
+
+
+async def get_employee_extended_stats(pool: asyncpg.Pool, user_id: int) -> dict:
+    async with pool.acquire() as conn:
+        # Задачи
+        task_row = await conn.fetchrow(
+            """SELECT
+               COUNT(CASE WHEN ta.status='assigned'    THEN 1 END) as assigned,
+               COUNT(CASE WHEN ta.status='in_progress' THEN 1 END) as in_progress,
+               COUNT(CASE WHEN ta.status='done'        THEN 1 END) as done
+               FROM task_assignments ta JOIN tasks t ON ta.task_id=t.id
+               WHERE ta.user_id=$1 AND t.status='active'""",
+            user_id
+        )
+        # Опоздания
+        late_count = await conn.fetchval(
+            "SELECT COUNT(*) FROM late_records WHERE user_id=$1 AND marked_late=TRUE", user_id
+        )
+        # Общее время опозданий (разница между реальным стартом смены и началом по расписанию)
+        late_minutes = await conn.fetchval(
+            """SELECT COALESCE(SUM(
+                 GREATEST(0, EXTRACT(EPOCH FROM (
+                   s.start_time AT TIME ZONE 'Europe/Moscow' -
+                   (s.date + us.shift_start)::TIMESTAMP
+                 )) / 60)
+               ), 0)::INTEGER
+               FROM late_records lr
+               JOIN shifts s ON s.user_id=lr.user_id AND s.date=lr.date
+               JOIN user_schedules us ON us.user_id=lr.user_id
+               WHERE lr.user_id=$1 AND lr.marked_late=TRUE AND s.start_time IS NOT NULL""",
+            user_id
+        )
+        # Смен в этом месяце
+        shifts_month = await conn.fetchval(
+            """SELECT COUNT(*) FROM shifts WHERE user_id=$1
+               AND date >= DATE_TRUNC('month', CURRENT_DATE) AND status='closed'""",
+            user_id
+        )
+        # Общее рабочее время (минус перерывы) за все время
+        total_work_minutes = await conn.fetchval(
+            """SELECT COALESCE(SUM(
+                 EXTRACT(EPOCH FROM (s.end_time - s.start_time)) / 60 -
+                 COALESCE((
+                   SELECT SUM(EXTRACT(EPOCH FROM (
+                     COALESCE(sb.end_time, s.end_time) - sb.start_time
+                   )) / 60)
+                   FROM shift_breaks sb
+                   WHERE sb.shift_id=s.id
+                 ), 0)
+               ), 0)::INTEGER
+               FROM shifts s
+               WHERE s.user_id=$1 AND s.status='closed'
+               AND s.end_time IS NOT NULL AND s.start_time IS NOT NULL""",
+            user_id
+        )
+        # Средняя оценка отчётов
+        avg_rating = await conn.fetchval(
+            "SELECT ROUND(AVG(rating)::NUMERIC, 1) FROM report_ratings WHERE user_id=$1",
+            user_id
+        )
+        return {
+            "assigned": task_row["assigned"],
+            "in_progress": task_row["in_progress"],
+            "done": task_row["done"],
+            "late_count": int(late_count),
+            "late_minutes": int(late_minutes),
+            "shifts_month": int(shifts_month),
+            "total_work_minutes": int(total_work_minutes),
+            "avg_rating": float(avg_rating) if avg_rating else None,
+        }
+
+
 async def get_user_shifts_history(pool: asyncpg.Pool, user_id: int) -> list:
     async with pool.acquire() as conn:
         rows = await conn.fetch(

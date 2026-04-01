@@ -43,6 +43,8 @@ export const api = {
     start: () => post<{ shift: import('./types').Shift }>('/shifts/start'),
     end: () => post<{ shift: import('./types').Shift }>('/shifts/end'),
     overview: () => get<{ overview: import('./types').ShiftOverview[]; date: string; time: string }>('/shifts/overview'),
+    breakStart: (type: 'lunch' | 'break') => post<{ break: import('./types').ShiftBreak }>('/shifts/break/start', { type }),
+    breakEnd: () => post<{ status: string }>('/shifts/break/end'),
   },
   tasks: {
     my: () => get<{ tasks: import('./types').Task[] }>('/tasks/my'),
@@ -76,6 +78,8 @@ export const api = {
       post('/reports', { done, problems, plans }),
     dates: () => get<{ dates: string[] }>('/reports/dates'),
     byDate: (date: string) => get<{ reports: import('./types').AdminReport[] }>(`/reports/${date}`),
+    rate: (date: string, userId: number, rating: number) =>
+      post<{ status: string; rating: number }>(`/reports/${date}/${userId}/rate`, { rating }),
   },
   attendance: {
     startCheck: () => post<{ check_id: number; expires_at: string }>('/attendance/check'),

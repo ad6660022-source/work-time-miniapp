@@ -97,9 +97,12 @@ async def get_stats(user_id: int, x_init_data: str = Header(...), request: Reque
     pool = request.app.state.pool
     tg_user = validate_init_data(x_init_data)
     user = await db.get_user(pool, tg_user["id"])
-    if not user or not user["is_admin"]:
+    # Свою статистику может видеть сам пользователь, чужую — только админ
+    if not user:
+        raise HTTPException(404)
+    if user["id"] != user_id and not user["is_admin"]:
         raise HTTPException(403)
-    stats = await db.get_employee_task_stats(pool, user_id)
+    stats = await db.get_employee_extended_stats(pool, user_id)
     return {"stats": stats}
 
 

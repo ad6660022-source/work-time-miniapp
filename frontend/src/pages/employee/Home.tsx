@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Play, Square, Clock, CheckCircle } from 'lucide-react'
+import { Play, Square, Clock, CheckCircle, Coffee, UtensilsCrossed } from 'lucide-react'
 import { api } from '../../api'
 import { useTelegram } from '../../hooks/useTelegram'
 import AttendanceBanner from '../../components/AttendanceBanner'
@@ -10,7 +10,9 @@ interface Props { userName: string }
 export default function EmployeeHome({ userName }: Props) {
   const [shift, setShift] = useState<Shift | null | undefined>(undefined)
   const [elapsed, setElapsed] = useState('')
+  const [breakElapsed, setBreakElapsed] = useState('')
   const [loading, setLoading] = useState(false)
+  const [breakLoading, setBreakLoading] = useState(false)
   const [error, setError] = useState('')
   const { haptic } = useTelegram()
 
@@ -21,7 +23,7 @@ export default function EmployeeHome({ userName }: Props) {
 
   useEffect(() => { load() }, [load])
 
-  // Live clock for active shift
+  // Таймер смены
   useEffect(() => {
     if (!shift || shift.status !== 'active' || !shift.start_time) return
     const tick = () => {
@@ -39,6 +41,21 @@ export default function EmployeeHome({ userName }: Props) {
     const t = setInterval(tick, 1000)
     return () => clearInterval(t)
   }, [shift])
+
+  // Таймер перерыва
+  useEffect(() => {
+    if (!shift?.active_break) { setBreakElapsed(''); return }
+    const startTs = new Date(shift.active_break.start_time).getTime()
+    const tick = () => {
+      const diff = Math.max(0, Date.now() - startTs)
+      const mins = Math.floor(diff / 60_000)
+      const secs = Math.floor((diff % 60_000) / 1000)
+      setBreakElapsed(`${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`)
+    }
+    tick()
+    const t = setInterval(tick, 1000)
+    return () => clearInterval(t)
+  }, [shift?.active_break])
 
   const doStart = async () => {
     if (loading) return
@@ -62,8 +79,31 @@ export default function EmployeeHome({ userName }: Props) {
     setLoading(false)
   }
 
+  const doBreakStart = async (type: 'lunch' | 'break') => {
+    if (breakLoading) return
+    setBreakLoading(true)
+    try {
+      await api.shifts.breakStart(type)
+      await load()
+      haptic.medium()
+    } catch (e: any) { setError(e.message) }
+    setBreakLoading(false)
+  }
+
+  const doBreakEnd = async () => {
+    if (breakLoading) return
+    setBreakLoading(true)
+    try {
+      await api.shifts.breakEnd()
+      await load()
+      haptic.success()
+    } catch (e: any) { setError(e.message) }
+    setBreakLoading(false)
+  }
+
   const isActive = shift?.status === 'active'
   const isClosed = shift?.status === 'closed'
+  const onBreak = !!shift?.active_break
 
   return (
     <div className="page fade-in">
@@ -78,18 +118,70 @@ export default function EmployeeHome({ userName }: Props) {
 
       <AttendanceBanner />
 
-      {/* Shift card */}
+      {/* Карточка смены */}
       <div className="glass card shift-display slide-up">
         {shift === undefined ? (
           <div className="loader"><div className="spinner" /></div>
         ) : isActive ? (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 8 }}>
-              <div className="dot dot-green" />
-              <span style={{ fontSize: 13, color: 'var(--green)', fontWeight: 600 }}>СМЕНА ИДЁТ</span>
-            </div>
-            <div className="shift-time shift-pulse">{elapsed || '00:00:00'}</div>
-            <div className="shift-label">начало в {shift.start_time}</div>
+            {onBreak ? (
+              /* ── На перерыве ── */
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 8 }}>
+                  <div className="dot" style={{ background: 'var(--amber)', boxShadow: '0 0 8px var(--amber)' }} />
+                  <span style={{ fontSize: 13, color: 'var(--amber)', fontWeight: 600 }}>
+                    {shift.active_break!.type === 'lunch' ? 'ОБЕД' : 'ОТОШЁЛ'}
+                  </span>
+                </div>
+                <div className="shift-time shift-pulse" style={{ color: 'var(--amber)' }}>
+                  {breakElapsed || '00:00'}
+                </div>
+                <div className="shift-label">смена: {elapsed || '00:00:00'}</div>
+                <div style={{ height: 24 }} />
+                <button
+                  className="btn btn-green btn-full"
+                  onClick={doBreakEnd}
+                  disabled={breakLoading}
+                >
+                  ✅ Я вернулся
+                </button>
+              </>
+            ) : (
+              /* ── Смена идёт ── */
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 8 }}>
+                  <div className="dot dot-green" />
+                  <span style={{ fontSize: 13, color: 'var(--green)', fontWeight: 600 }}>СМЕНА ИДЁТ</span>
+                </div>
+                <div className="shift-time shift-pulse">{elapsed || '00:00:00'}</div>
+                <div className="shift-label">начало в {shift.start_time}</div>
+                <div style={{ height: 20 }} />
+
+                {/* Кнопки перерыва */}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  <button
+                    className="btn btn-glass"
+                    style={{ flex: 1, fontSize: 13 }}
+                    onClick={() => doBreakStart('lunch')}
+                    disabled={breakLoading}
+                  >
+                    <UtensilsCrossed size={15} /> Обед
+                  </button>
+                  <button
+                    className="btn btn-glass"
+                    style={{ flex: 1, fontSize: 13 }}
+                    onClick={() => doBreakStart('break')}
+                    disabled={breakLoading}
+                  >
+                    <Coffee size={15} /> Отошёл
+                  </button>
+                </div>
+
+                <button className="btn btn-red btn-full" onClick={doEnd} disabled={loading}>
+                  <Square size={18} /> Завершить смену
+                </button>
+              </>
+            )}
           </>
         ) : isClosed ? (
           <>
@@ -105,6 +197,10 @@ export default function EmployeeHome({ userName }: Props) {
                 {Math.floor(shift.duration_minutes / 60)}ч {shift.duration_minutes % 60}мин
               </div>
             )}
+            <div style={{ height: 24 }} />
+            <button className="btn btn-green btn-full" onClick={doStart} disabled={loading}>
+              <Play size={18} /> Возобновить смену
+            </button>
           </>
         ) : (
           <>
@@ -114,23 +210,14 @@ export default function EmployeeHome({ userName }: Props) {
             </div>
             <div className="shift-time" style={{ color: 'var(--text-muted)' }}>--:--:--</div>
             <div className="shift-label">рабочий день с 9:00</div>
+            <div style={{ height: 24 }} />
+            <button className="btn btn-green btn-full" onClick={doStart} disabled={loading}>
+              <Play size={18} /> Начать смену
+            </button>
           </>
-        )}
-
-        <div style={{ height: 24 }} />
-
-        {isActive ? (
-          <button className="btn btn-red btn-full" onClick={doEnd} disabled={loading}>
-            <Square size={18} /> Завершить смену
-          </button>
-        ) : (
-          <button className="btn btn-green btn-full" onClick={doStart} disabled={loading}>
-            <Play size={18} /> {isClosed ? 'Возобновить смену' : 'Начать смену'}
-          </button>
         )}
       </div>
 
-      {/* Quick stats */}
       <QuickStats />
     </div>
   )
@@ -140,7 +227,6 @@ function QuickStats() {
   const [stats, setStats] = useState<any>(null)
 
   useEffect(() => {
-    // get my own stats via users endpoint — reuse progress
     import('../../api').then(({ api }) => {
       api.auth.me().then(r => {
         if (r.user) {
@@ -152,25 +238,40 @@ function QuickStats() {
 
   if (!stats) return null
 
+  const totalHours = Math.floor((stats.total_work_minutes || 0) / 60)
+  const totalMins  = (stats.total_work_minutes || 0) % 60
+
   return (
     <>
-      <div className="section-label">Задачи сегодня</div>
+      <div className="section-label">Моя статистика</div>
       <div className="stats-grid">
         <div className="glass-sm stat-card">
-          <div className="stat-value stat-amber">{stats.assigned}</div>
-          <div className="stat-label">Ожидают</div>
+          <div className="stat-value stat-green">{stats.done}</div>
+          <div className="stat-label">Выполнено</div>
         </div>
         <div className="glass-sm stat-card">
           <div className="stat-value stat-blue">{stats.in_progress}</div>
           <div className="stat-label">В работе</div>
         </div>
         <div className="glass-sm stat-card">
-          <div className="stat-value stat-green">{stats.done}</div>
-          <div className="stat-label">Выполнено</div>
+          <div className="stat-value stat-amber">{stats.assigned}</div>
+          <div className="stat-label">Ожидают</div>
         </div>
         <div className="glass-sm stat-card">
           <div className="stat-value stat-red">{stats.late_count}</div>
-          <div className="stat-label">Опозданий</div>
+          <div className="stat-label">Опоздания</div>
+        </div>
+      </div>
+      <div className="stats-grid" style={{ marginTop: 8 }}>
+        <div className="glass-sm stat-card" style={{ gridColumn: 'span 2' }}>
+          <div className="stat-value stat-purple">{totalHours}ч {totalMins}м</div>
+          <div className="stat-label">Отработано всего</div>
+        </div>
+        <div className="glass-sm stat-card" style={{ gridColumn: 'span 2' }}>
+          <div className="stat-value stat-amber">
+            {stats.avg_rating != null ? `${stats.avg_rating} ★` : '—'}
+          </div>
+          <div className="stat-label">Средняя оценка</div>
         </div>
       </div>
     </>

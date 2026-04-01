@@ -9,6 +9,12 @@ export interface User {
   is_blocked: boolean
 }
 
+export interface ShiftBreak {
+  id: number
+  type: 'lunch' | 'break'
+  start_time: string
+}
+
 export interface Shift {
   id: number
   date: string
@@ -16,6 +22,7 @@ export interface Shift {
   end_time?: string
   status: 'active' | 'closed'
   duration_minutes?: number
+  active_break?: ShiftBreak | null
 }
 
 export interface Task {
@@ -50,8 +57,11 @@ export interface Report {
 }
 
 export interface AdminReport extends Report {
+  user_id: number
   name: string
   position?: string
+  rating?: number | null
+  rated_by?: number | null
 }
 
 export interface ShiftOverview {
@@ -76,7 +86,10 @@ export interface Stats {
   in_progress: number
   done: number
   late_count: number
+  late_minutes: number
   shifts_month: number
+  total_work_minutes: number
+  avg_rating: number | null
 }
 
 export interface UserHistory {
