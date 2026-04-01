@@ -81,6 +81,9 @@ export const api = {
     rate: (date: string, userId: number, rating: number) =>
       post<{ status: string; rating: number }>(`/reports/${date}/${userId}/rate`, { rating }),
   },
+  announcements: {
+    send: (text: string) => post<{ sent: number }>('/announcements', { text }),
+  },
   attendance: {
     startCheck: () => post<{ check_id: number; expires_at: string }>('/attendance/check'),
     respond: () => post<{ status: string }>('/attendance/respond'),

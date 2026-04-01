@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Shield, Users, Play, Square, Coffee, UtensilsCrossed } from 'lucide-react'
+import { Shield, Users, Play, Square, Coffee, UtensilsCrossed, Megaphone, X } from 'lucide-react'
 import { api } from '../../api'
 import { useTelegram } from '../../hooks/useTelegram'
 import AttendanceBanner from '../../components/AttendanceBanner'
@@ -82,6 +82,11 @@ export default function AdminDashboard({ userName }: Props) {
     const t = setInterval(tick, 1000)
     return () => clearInterval(t)
   }, [shift])
+
+  const [showAnnounce, setShowAnnounce] = useState(false)
+  const [announceText, setAnnounceText] = useState('')
+  const [announceSending, setAnnounceSending] = useState(false)
+  const [announceMsg, setAnnounceMsg] = useState('')
 
   const [countdown, setCountdown] = useState(0)
   useEffect(() => {
@@ -312,6 +317,60 @@ export default function AdminDashboard({ userName }: Props) {
               <Users size={18} /> Запустить проверку
             </button>
           </>
+        )}
+      </div>
+
+      {/* ── Объявление ── */}
+      <div className="glass card" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showAnnounce ? 14 : 0 }}>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Megaphone size={15} /> ОБЪЯВЛЕНИЕ
+          </div>
+          <button
+            className="btn btn-glass btn-sm"
+            onClick={() => { setShowAnnounce(!showAnnounce); setAnnounceMsg('') }}
+            style={{ padding: '6px 12px', fontSize: 13 }}
+          >
+            {showAnnounce ? <><X size={14} /> Закрыть</> : '+ Написать'}
+          </button>
+        </div>
+
+        {showAnnounce && (
+          <div className="fade-in">
+            {announceMsg && (
+              <div
+                className={`alert ${announceMsg.startsWith('✅') ? 'alert-success' : 'alert-error'}`}
+                style={{ marginBottom: 12 }}
+              >
+                {announceMsg}
+              </div>
+            )}
+            <textarea
+              className="input"
+              rows={4}
+              placeholder="Текст объявления для всех сотрудников…"
+              value={announceText}
+              onChange={e => setAnnounceText(e.target.value)}
+            />
+            <button
+              className="btn btn-primary btn-full"
+              style={{ marginTop: 10 }}
+              disabled={announceSending}
+              onClick={async () => {
+                if (!announceText.trim()) return
+                setAnnounceSending(true)
+                try {
+                  const r = await api.announcements.send(announceText.trim())
+                  haptic.success()
+                  setAnnounceMsg(`✅ Отправлено ${r.sent} участникам`)
+                  setAnnounceText('')
+                } catch (e: any) { setAnnounceMsg('Ошибка: ' + e.message) }
+                setAnnounceSending(false)
+              }}
+            >
+              {announceSending ? 'Отправка…' : <><Megaphone size={16} /> Отправить всем</>}
+            </button>
+          </div>
         )}
       </div>
 

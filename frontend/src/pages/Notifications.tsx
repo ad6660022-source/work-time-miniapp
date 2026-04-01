@@ -4,14 +4,15 @@ import { api } from '../api'
 import type { Notification } from '../types'
 
 const TYPE_ICON: Record<string, string> = {
-  task:       '📌',
-  task_done:  '✅',
-  shift:      '⏰',
-  report:     '📝',
-  attendance: '📍',
-  late:       '🔴',
-  approval:   '🎉',
-  info:       '💬',
+  task:         '📌',
+  task_done:    '✅',
+  shift:        '⏰',
+  report:       '📝',
+  attendance:   '📍',
+  late:         '🔴',
+  approval:     '🎉',
+  info:         '💬',
+  announcement: '📢',
 }
 
 function fmtTime(iso: string) {
