@@ -12,6 +12,8 @@ interface SettingsState {
   notify_late: boolean
 }
 
+type NotifyKey = 'notify_tasks' | 'notify_attendance' | 'notify_announcements' | 'notify_reports' | 'notify_late'
+
 export default function Settings() {
   const { haptic } = useTelegram()
   const [form, setForm] = useState<SettingsState>({
@@ -42,14 +44,14 @@ export default function Settings() {
     setSaving(false)
   }
 
-  const toggle = (key: keyof SettingsState) => {
+  const toggle = (key: NotifyKey) => {
     haptic.light()
     setForm(prev => ({ ...prev, [key]: !prev[key] }))
   }
 
   if (loading) return <div className="loader"><div className="spinner" /></div>
 
-  const notifyOptions: { key: keyof SettingsState; label: string; desc: string }[] = [
+  const notifyOptions: { key: NotifyKey; label: string; desc: string }[] = [
     { key: 'notify_tasks',         label: '📌 Задачи',              desc: 'Создание и выполнение задач' },
     { key: 'notify_attendance',    label: '📍 Проверка присутствия', desc: 'Запуск и итоги проверки' },
     { key: 'notify_announcements', label: '📢 Объявления',           desc: 'Объявления от администраторов' },
