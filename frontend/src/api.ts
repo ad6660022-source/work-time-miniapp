@@ -91,6 +91,7 @@ export const api = {
       notify_attendance: boolean
       notify_announcements: boolean
       notify_reports: boolean
+      notify_late: boolean
     }>('/settings'),
     save: (data: {
       group_chat_id?: string
@@ -98,6 +99,7 @@ export const api = {
       notify_attendance?: boolean
       notify_announcements?: boolean
       notify_reports?: boolean
+      notify_late?: boolean
     }) => post<{ status: string }>('/settings', data),
   },
   attendance: {

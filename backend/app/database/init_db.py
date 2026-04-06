@@ -125,7 +125,8 @@ INSERT INTO app_settings (key, value) VALUES
     ('notify_tasks',           'true'),
     ('notify_attendance',      'true'),
     ('notify_announcements',   'true'),
-    ('notify_reports',         'true')
+    ('notify_reports',         'true'),
+    ('notify_late',            'true')
 ON CONFLICT (key) DO NOTHING;
 """
 

@@ -12,26 +12,29 @@ logger = logging.getLogger(__name__)
 MOSCOW_TZ = pytz.timezone("Europe/Moscow")
 
 
+def _is_workday(sched, weekday: int) -> bool:
+    if sched and sched.get("work_days"):
+        return weekday in list(sched["work_days"])
+    return weekday in [0, 1, 2, 3, 4]  # default Mon–Fri
+
+
 async def job_lateness(pool: asyncpg.Pool, threshold_minute: int, notify_admin: bool):
     today = datetime.now(MOSCOW_TZ).date()
     weekday = today.weekday()
     employees = await db.get_employees(pool)
+    from app.bot import send_message_to_user, send_to_group
+
+    late_names = []  # для отправки в группу на 9:15
 
     for emp in employees:
         sched = await db.get_schedule(pool, emp["id"])
-        if sched and sched.get("work_days"):
-            work_days = list(sched["work_days"])
-        else:
-            work_days = [0, 1, 2, 3, 4]  # default Mon–Fri
-        if weekday not in work_days:
+        if not _is_workday(sched, weekday):
             continue
         shift = await db.get_today_shift(pool, emp["id"])
         if shift:
             continue
 
         late = await db.get_late_record(pool, emp["id"], today)
-
-        from app.bot import send_message_to_user
 
         try:
             if threshold_minute == 9 * 60 + 5 and (not late or not late.get("notified_905")):
@@ -57,11 +60,26 @@ async def job_lateness(pool: asyncpg.Pool, threshold_minute: int, notify_admin: 
                     )
                     await send_message_to_user(admin["telegram_id"],
                         f"🔴 <b>Опоздание</b>\n\n<b>{emp['name']}</b> не начал смену в 9:15")
+                late_names.append(emp["name"])
         except Exception as e:
             logger.warning(f"Lateness job error for {emp['id']}: {e}")
 
+    # Одно сообщение в группу со всеми опоздавшими
+    if notify_admin and late_names and await db.get_setting(pool, "notify_late") == "true":
+        group_id = await db.get_setting(pool, "group_chat_id")
+        if group_id:
+            names_str = "\n".join(f"  🔴 {n}" for n in late_names)
+            await send_to_group(group_id, f"🔴 <b>Опоздания на 9:15</b>\n\n{names_str}")
+
 
 async def job_close_shifts(pool: asyncpg.Pool):
+    today = datetime.now(MOSCOW_TZ).date()
+    weekday = today.weekday()
+    employees = await db.get_employees(pool)
+    any_working = any(_is_workday(await db.get_schedule(pool, e["id"]), weekday) for e in employees)
+    if not any_working:
+        return
+
     closed_ids = await db.auto_close_all_active_shifts(pool)
     from app.bot import send_message_to_user
     for uid in closed_ids:
@@ -78,21 +96,36 @@ async def job_close_shifts(pool: asyncpg.Pool):
 
 
 async def job_missing_reports(pool: asyncpg.Pool):
-    missing = await db.get_users_without_report(pool)
+    today = datetime.now(MOSCOW_TZ).date()
+    weekday = today.weekday()
+
+    missing_all = await db.get_users_without_report(pool)
+    if not missing_all:
+        return
+
+    # Фильтруем: только те, у кого сегодня рабочий день по графику
+    missing = []
+    for u in missing_all:
+        sched = await db.get_schedule(pool, u["id"])
+        if _is_workday(sched, weekday):
+            missing.append(u)
+
     if not missing:
         return
-    names = ", ".join(u["name"] for u in missing)
+
     admins = await db.get_admins(pool)
-    from app.bot import send_message_to_user
+    from app.bot import send_message_to_user, send_to_group
+    text = f"📋 <b>Отчёты не сданы</b>\n\n" + "\n".join(f"• {u['name']}" for u in missing)
+    names = ", ".join(u["name"] for u in missing)
     for admin in admins:
-        await db.create_notification(
-            pool, admin["id"], f"📋 Не сдали отчёт: {names}", "report"
-        )
-        await send_message_to_user(
-            admin["telegram_id"],
-            f"📋 <b>Отчёты не сданы</b>\n\n" +
-            "\n".join(f"• {u['name']}" for u in missing)
-        )
+        await db.create_notification(pool, admin["id"], f"📋 Не сдали отчёт: {names}", "report")
+        await send_message_to_user(admin["telegram_id"], text)
+
+    # В группу
+    if await db.get_setting(pool, "notify_reports") == "true":
+        group_id = await db.get_setting(pool, "group_chat_id")
+        if group_id:
+            await send_to_group(group_id, text)
 
 
 async def job_reports_summary(pool: asyncpg.Pool):
@@ -104,6 +137,13 @@ async def job_reports_summary(pool: asyncpg.Pool):
         return
 
     today = datetime.now(MOSCOW_TZ).date()
+    weekday = today.weekday()
+
+    # Проверяем: есть ли хоть один сотрудник у которого сегодня рабочий день
+    employees = await db.get_employees(pool)
+    any_working = any(_is_workday(await db.get_schedule(pool, e["id"]), weekday) for e in employees)
+    if not any_working:
+        return
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             "SELECT done, problems, plans FROM daily_reports WHERE date=$1",

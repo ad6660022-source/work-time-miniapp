@@ -22,6 +22,7 @@ class SettingsBody(BaseModel):
     notify_attendance: Optional[bool] = None
     notify_announcements: Optional[bool] = None
     notify_reports: Optional[bool] = None
+    notify_late: Optional[bool] = None
 
 
 @router.get("")
@@ -39,6 +40,7 @@ async def get_settings(x_init_data: str = Header(...), request: Request = None):
         "notify_attendance":    raw.get("notify_attendance", "true") == "true",
         "notify_announcements": raw.get("notify_announcements", "true") == "true",
         "notify_reports":       raw.get("notify_reports", "true") == "true",
+        "notify_late":          raw.get("notify_late", "true") == "true",
     }
 
 
@@ -64,5 +66,7 @@ async def save_settings(
         await db.set_setting(pool, "notify_announcements", "true" if body.notify_announcements else "false")
     if body.notify_reports is not None:
         await db.set_setting(pool, "notify_reports", "true" if body.notify_reports else "false")
+    if body.notify_late is not None:
+        await db.set_setting(pool, "notify_late", "true" if body.notify_late else "false")
 
     return {"status": "ok"}

@@ -9,6 +9,7 @@ interface SettingsState {
   notify_attendance: boolean
   notify_announcements: boolean
   notify_reports: boolean
+  notify_late: boolean
 }
 
 export default function Settings() {
@@ -19,6 +20,7 @@ export default function Settings() {
     notify_attendance: true,
     notify_announcements: true,
     notify_reports: true,
+    notify_late: true,
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -48,10 +50,11 @@ export default function Settings() {
   if (loading) return <div className="loader"><div className="spinner" /></div>
 
   const notifyOptions: { key: keyof SettingsState; label: string; desc: string }[] = [
-    { key: 'notify_tasks',         label: '📌 Задачи',            desc: 'Создание и выполнение задач' },
+    { key: 'notify_tasks',         label: '📌 Задачи',              desc: 'Создание и выполнение задач' },
     { key: 'notify_attendance',    label: '📍 Проверка присутствия', desc: 'Запуск и итоги проверки' },
-    { key: 'notify_announcements', label: '📢 Объявления',         desc: 'Объявления от администраторов' },
-    { key: 'notify_reports',       label: '📊 Сводка отчётов',     desc: 'Итоги дня отправляются в 19:05' },
+    { key: 'notify_announcements', label: '📢 Объявления',           desc: 'Объявления от администраторов' },
+    { key: 'notify_reports',       label: '📊 Отчёты',              desc: 'Сводка в 19:05 + кто не сдал в 19:30' },
+    { key: 'notify_late',          label: '🔴 Опоздания',           desc: 'Список опоздавших в 9:15' },
   ]
 
   return (
