@@ -72,12 +72,19 @@ async def job_lateness(pool: asyncpg.Pool, threshold_minute: int, notify_admin: 
             await send_to_group(group_id, f"🔴 <b>Опоздания на 9:15</b>\n\n{names_str}")
 
 
+async def _any_workday(pool, employees, weekday: int) -> bool:
+    for e in employees:
+        sched = await db.get_schedule(pool, e["id"])
+        if _is_workday(sched, weekday):
+            return True
+    return False
+
+
 async def job_close_shifts(pool: asyncpg.Pool):
     today = datetime.now(MOSCOW_TZ).date()
     weekday = today.weekday()
     employees = await db.get_employees(pool)
-    any_working = any(_is_workday(await db.get_schedule(pool, e["id"]), weekday) for e in employees)
-    if not any_working:
+    if not await _any_workday(pool, employees, weekday):
         return
 
     closed_ids = await db.auto_close_all_active_shifts(pool)
@@ -141,8 +148,7 @@ async def job_reports_summary(pool: asyncpg.Pool):
 
     # Проверяем: есть ли хоть один сотрудник у которого сегодня рабочий день
     employees = await db.get_employees(pool)
-    any_working = any(_is_workday(await db.get_schedule(pool, e["id"]), weekday) for e in employees)
-    if not any_working:
+    if not await _any_workday(pool, employees, weekday):
         return
     async with pool.acquire() as conn:
         rows = await conn.fetch(
